@@ -1,40 +1,10 @@
-"""
-20 rows of seats
-different algorithms for seat pricing, user can select variation depending on event
-
-***Classic Algorithm***
-each row has a ranking that increases in price relative to closeness to stage
-Ex: base price (x), seat price (y), y = x * 1.10 ** (something * count)
-
-Stadium class
--name of stadium
--assigns algorithm of choice
--stores different stadium layouts
-
-Seat class
--stores dictionary of seats, rows going from A-Z with base price & actual seat number corresponding to letter
--records which seats are available
-"""
-#button class that stores each rect object, have button method within that takes x,y parameters and compares rect coords with click cords
-#have button method that takes parameters: x, y
-
-#TBD
-'''
--Reserve Funciton
-    -start from scratch
-    -save input row letter and number to csv
-    -have csv file be read on launch and change color of seat to red if file matches seat
-    -NOTES************
-        -Use Pandas to Convert CSV File to Dictionary in Python - would pandas be better? FUCK ALL THAT USE PANDAS AND CLEAN THIS SHIT EASY
-        After importing pandas, make use of its built-in function read_csv() with a few parameters to specify the csv file format. 
-        After calling read_csv() , convert the result to a dictionary using the built-in pandas function to_dict() .
-
--red is drawn on seats saved into excell file, need to set it so those seats are removed from the rects list to not allow for selection (drawing another rect to cover up the red)
-
-'''
 
 from contextlib import nullcontext
+from email.policy import default
+import re
 from string import ascii_uppercase
+from tabnanny import check
+from collections import OrderedDict, defaultdict
 import pygame, sys, csv
 import pandas as pd
 pygame.init()
@@ -46,8 +16,10 @@ class Setup():
         seats_dict = Stadium().seats_dict
         size = width, height = 1200, 920
         rect_color = 255, 0, 0
+        self.res_check = 0
         screen_color = 211, 211, 211
         clicked_rects = []
+        self.saved_seats = []
         total = 0
         self.screen = pygame.display.set_mode(size)
         self.square_size = 50
@@ -58,31 +30,39 @@ class Setup():
             for event in pygame.event.get():
                 pos = pygame.mouse.get_pos()
                 if event.type == pygame.MOUSEBUTTONUP:
-                    self.Update_grid(pos, clicked_rects, seats_dict, total)
+                    self.Update_grid(pos, clicked_rects, seats_dict, total, self.screen)
                 if event.type == pygame.QUIT: 
                     sys.exit()
             pygame.display.flip()
-
-    def seat_Compare(self, letter, seat_num):
+    def seat_Compare(self, letter, seat_num, check_total):   
+        addition = 1      
         for record in df:
-            if letter == record:
-                print("MATCH")
-                for num in df[record]:
-                    print("SEAT NUM", seat_num, " == ", num)
-                    if float(seat_num) == num:
-                        print("RED")
-                        return (255, 0 , 0)
+            if letter == record and df.empty != True:
+                letter_index = ascii_uppercase.index(letter)
+                #print("THIS DUDE: ",df.iloc[:, ascii_uppercase.index(letter)][1]) # this finds the second index of the column starting at 0,
+                # need to increase count by 1 each time it goes through a num in the df to go to the next row
+                num = df.iloc[:, letter_index][check_total]
+                values = df.iloc[:, letter_index].value_counts()
+                if float(seat_num) == float(num): 
+                    #if numbers match, set seat color to red and add 1 to counter to move onto next seat
+                    #print("NUM: ", num)
+                    self.saved_seats.append(str(letter_index) + "," + str(int(num)))
+                    #print("CHECK: ", check_total, "Vals: ", len(values))
+                    if (len(values)-1) == (check_total):
+                        #print("hit 3")
+                        addition = 0
+                    return (255, 0 , 0), addition
                         
-                    else:
-                        print("BLACK")
-                        return (0, 0, 0)
+                else: 
+                    #if numbers don't match, set color to black
+                    return (0, 0, 0), 0
 
 
     def Create_Grid(self, screen, width, height, square_size, seats_dict):
         row_count = 0
-        rect_color = 255, 0, 0
-        BLACK = (0, 0, 0)
-        WHITE = (200, 200, 200) 
+        check = 0
+        check_total = 0
+        color = (0,0,0)
         self.row_list = []
         self.rect_obj_row = []
         row_count = 0
@@ -92,18 +72,18 @@ class Setup():
             seat_count = 0
             column_list = []
             self.rect_obj_col = []
+            check_total = 0
+
             for column in range(2, 22): #y coordinates of grid, difference is number of seats in column
                 column_count += 1
-                #print(row_count)
-                #print(letter)
-                current_seat = str(ascii_uppercase[row_count]) + str(column_count)#THIS IS THE ADDITION
-                print("ROW COUNT", row_count)
-                print("COLUMN COUNT", column_count)
-                color = self.seat_Compare(str(ascii_uppercase[row_count]), str(column_count))
-                print("CURRENT SEAT:", current_seat, " - COLOR: ", color)
+
+                if df.empty != True:
+                    color, check = self.seat_Compare(str(ascii_uppercase[row_count]), str(column_count), check_total)
+                check_total += check
 
                 rect = pygame.Rect(column*self.square_size, row*self.square_size, self.square_size, self.square_size) #creates a square relative to position
                 pygame.draw.rect(screen, color, rect, width = 2, border_radius=5 )
+
                 seat_count +=1             
                 seat_identity = letter + str(seat_count) 
                 seat_identity_visual = self.seat_font.render(seat_identity, 1, (0,0,0))
@@ -116,50 +96,37 @@ class Setup():
             column_count = 0
             self.rect_obj_row.append(self.rect_obj_col)
             self.row_list.append(column_list)
+        self.del_row_list()
 
-        #print("ROW LIST: ",self.row_list)
-        #print("\n\n\n OBJS: ", self.rect_obj_row)
+    def del_row_list(self):
+        print(self.row_list)        
+        for elements in self.saved_seats:
+            let, number = elements.split(",")
+            diff = 20 - len(self.row_list[int(let)])
+            number = int(number) - 1 - diff
+            self.row_list[int(let)].pop(number)
 
     def Extra_Layout(self, screen, rect_color):
         pygame.draw.rect(screen, rect_color, (270, 20, 650, 20), 3, border_radius=20)
         label = self.myfont.render("Screen", 1, (0,0,0))
         screen.blit(label, (550, 17))
 
-        pygame.draw.rect(screen, (0, 0, 0), (415, 730, 70, 70), 2) #budget buttons
-        label1 = self.myfont.render("<$8", 1, (0,0,0))
-        screen.blit(label1, (425, 750))
-
-        pygame.draw.rect(screen, (0, 0, 0), (515, 730, 70, 70), 2)
-        label2 = self.myfont.render("<$10", 1, (0,0,0))
-        screen.blit(label2, (525, 750))
-
-        pygame.draw.rect(screen, (0, 0, 0), (615, 730, 70, 70), 2)
-        label3 = self.myfont.render("<$12", 1, (0,0,0))
-        screen.blit(label3, (625, 750))
-
-        pygame.draw.rect(screen, (0, 0, 0), (715, 730, 70, 70), 2)
-        label4 = self.myfont.render("<$14", 1, (0,0,0))
-        screen.blit(label4, (725, 750))
-
         pygame.draw.rect(screen, (0, 255, 0), (538, 820, 130, 90), 4, border_radius=50)
         label4 = self.myfont.render("RESERVE", 1, (0,0,0))
         screen.blit(label4, (558, 850))
 
-
-    def Update_grid(self, pos, clicked_rects, seats_dict, total):
-        count = -1
-        innercount = -1
-        check = 0
-        if pos[0] > 538 and pos[0] < 668 and pos[1] > 820 and pos[1] < 910: #RESERVE BUTTON, could be its own function tbh
+    def res_button(self, pos, clicked_rects, seats_dict, total, screen):
+        if pos[0] > 538 and pos[0] < 668 and pos[1] > 820 and pos[1] < 910: #RESERVE BUTTON, could be its own function 
+            pygame.draw.rect(self.screen, (211, 211, 211), (538, 820, 130, 90), 50)
             pygame.draw.rect(self.screen, (0, 255, 255), (538, 820, 130, 90), 4, border_radius=50)
+            final_label = self.myfont.render("THANK YOU", 1, (0,0,0))
+            screen.blit(final_label, (545, 850))
             for item in clicked_rects:
-                print(item)
                 for r in self.row_list:
                     for stuff in r:
-                        if stuff == item:
-                            print("ITS IN")                            
+                        if stuff == item:   # stuff was r                        
                             place1 = self.row_list.index(r)
-                            place2 = r.index(stuff)
+                            place2 = r.index(stuff) #stuff was r
                             print(ascii_uppercase[place1], 3)
                             APEX.reserve(ascii_uppercase[place1], place2)
                             total += seats_dict[ascii_uppercase[place1]]
@@ -167,45 +134,48 @@ class Setup():
                             pygame.draw.rect(self.screen, (211, 211, 211), (183, 820, 250, 90), 50)
                             sublabel = self.myfont.render(str("Subtotal: $" + fixed_total), 1, (0,0,0))
                             self.screen.blit(sublabel, (183, 850))
-                                   
-        for rects in self.row_list:
-            count +=1
-            for rect in rects:
-                innercount +=1
-                if pos[0] > rect[0] and pos[0] < (rect[0] + 50) and pos[1] > rect[1] and pos[1] < (rect[1] + 50): #SEAT BUTTONS
-                    x = rect[0]
-                    y = rect[1]
-                    pygame.draw.rect(self.screen, (0, 255, 200), (x, y, 50, 50), 2, border_radius=5 )
-                    rcords = [x,y] 
-                
-                    if rcords in clicked_rects:
-                        pygame.draw.rect(self.screen, (0, 0, 0), (x, y, 50, 50), 2, border_radius=5 )
-                        pygame.draw.rect(self.screen, (211, 211, 211), (683, 820, 500, 90))
-                        price, name = APEX.seat_info(clicked_rects, seats_dict, self.row_list, total, rcords)
-                        print(name, price)
-                        sublabel = self.myfont.render(("Seat: " + name + " | Seat Price: $" + price), 1, (0,0,0))
-                        check = 1
-                        
-                    if rcords not in clicked_rects:
-                        pygame.draw.rect(self.screen, (211, 211, 211), (683, 820, 500, 90))
-                        clicked_rects.append(rcords)
-                        price, name = APEX.seat_info(clicked_rects, seats_dict, self.row_list, total,rcords)
-                        print(name, price)
-                        sublabel = self.myfont.render(("Seat: " + name + " | Seat Price: $" + price), 1, (0,0,0))                       
-                        self.screen.blit(sublabel, (700, 850))
-                    
-                    if check == 1:
-                        clicked_rects.remove(rcords)
-                    print("Clicked Rects: ", clicked_rects)
+            self.res_check = 1    
 
-                    if len(clicked_rects) < 1:
-                        pygame.draw.rect(self.screen, (0, 255, 0), (538, 820, 130, 90), 4, border_radius=50)
-                        pygame.draw.rect(self.screen, (211, 211, 211), (183, 820, 250, 90), 50)
-                        total = 0                                 
-                innercount = -1
+    def Update_grid(self, pos, clicked_rects, seats_dict, total, screen):
+        count = -1
+        innercount = -1
+        check = 0
+        if self.res_check != 1:
+            self.res_button(pos, clicked_rects, seats_dict, total, screen)
+            for rects in self.row_list:
+                count +=1
+                for rect in rects:
+                    innercount +=1
+                    if pos[0] > rect[0] and pos[0] < (rect[0] + 50) and pos[1] > rect[1] and pos[1] < (rect[1] + 50): #SEAT BUTTONS
+                        x = rect[0]
+                        y = rect[1]
+                        pygame.draw.rect(self.screen, (0, 255, 255), (x, y, 50, 50), 2, border_radius=5 )
+                        rcords = [x,y] 
+                    
+                        if rcords in clicked_rects:
+                            pygame.draw.rect(self.screen, (0, 0, 0), (x, y, 50, 50), 2, border_radius=5 )
+                            price, name = APEX.seat_info(seats_dict, self.row_list, total, rcords)
+                            sublabel = self.myfont.render(("Seat: " + name + " | Seat Price: $" + price), 1, (0,0,0))
+                            check = 1
+                            
+                        if rcords not in clicked_rects:
+                            pygame.draw.rect(self.screen, (211, 211, 211), (683, 820, 500, 90))
+                            clicked_rects.append(rcords)
+                            price, name = APEX.seat_info(seats_dict, self.row_list, total,rcords)
+                            sublabel = self.myfont.render(("Seat: " + name + " | Seat Price: $" + price), 1, (0,0,0))                       
+                            self.screen.blit(sublabel, (700, 850))
+                        
+                        if check == 1:
+                            clicked_rects.remove(rcords)
+
+                        if len(clicked_rects) < 1:
+                            pygame.draw.rect(self.screen, (0, 255, 0), (538, 820, 130, 90), 4, border_radius=50)
+                            pygame.draw.rect(self.screen, (211, 211, 211), (183, 820, 250, 90), 50)
+                            total = 0                                 
+                    innercount = -1
 
 class Stadium():
-    b_price = 6   #this eventually will be an input in constructor
+    b_price = 6   #base price, can be changed
     def __init__(self):
         self.seats_dict = {}
         self.reserved = {}
@@ -216,19 +186,31 @@ class Stadium():
             self.reserved[i] = []
             self.seats_dict[i] = []
             for seat_num in range(0,20):
-                self.seats_dict[i] = (Seat(i, seat_num+1).get_price())               
-        
-        print(self.seats_dict)
+                self.seats_dict[i] = (Seat(i, seat_num+1).get_price())
 
-    def reserve(self, row_letter, seat_num): #to do: add I/O for reserving, show total price of each seat in cart, store who has what seats_dict
+    def write_to_file(self, reserved):
+        #TBD: set row letters to actual rows within excell file - easy fix
+        global df
+        df2=pd.DataFrame(dict([ (k,pd.Series(v)) for k,v in reserved.items() ]))
+        x  = df.append(df2)
+        print("DF AFTER: \n", x)
+        x.reset_index(drop=True, inplace=True)
+        x.to_excel("C:\\Users\\Will-Meister\\Desktop\\stuff99\\Stadium_PROJECT\\Seats.xlsx", index = False)               
+
+    def reserve(self, row_letter, seat_num): 
+        seat_num = seat_num + 1
         if seat_num not in self.reserved[row_letter]:
+            print("SEAT ", seat_num)
             self.reserved[row_letter].append(seat_num)
-            print("Row: " , row_letter, "|", "Seat #: " , seat_num, "|",  "Price: " , Seat(row_letter, seat_num).get_price())
-            print(self.reserved)
-
+            for rows in self.reserved:
+                self.reserved[rows].sort()
+                print(self.reserved[rows])
+            a = self.reserved
+            self.write_to_file(a)
         else:
             print("Seat already taken")
             return False
+
         print (row_letter, " - ", self.reserved[row_letter])
     
     def budget(self, min, max):
@@ -237,7 +219,7 @@ class Stadium():
                 if Seat.get_price(seat) > min and Seat.get_price(seat) < max: 
                     print(seat, "is in budget")
     
-    def seat_info(self, clicked_rects, seats_dict, row_list, total, rcords):
+    def seat_info(self, seats_dict, row_list, total, rcords):
         for r in row_list:
             for stuff in r:
                 if stuff == rcords:
@@ -245,7 +227,6 @@ class Stadium():
                     place1 = row_list.index(r)
                     place2 = r.index(stuff) + 1
                     name = str(ascii_uppercase[place1]) + str(place2)
-                    APEX.reserve(ascii_uppercase[place1], place2)
                     total += seats_dict[ascii_uppercase[place1]] 
                     fixed_total = "{:.2f}".format(total)
                     return str(fixed_total), str(name)
@@ -272,12 +253,7 @@ class Seat():
         return (str(self.seat_list))
 
 if __name__ == "__main__":
-    df = pd.read_excel("C:\\Users\\Will-Meister\\Desktop\\stuff99\\Stadium_PROJECT\\Seats.xlsx")
-    df.to_dict('records')
+    read = pd.read_excel("C:\\Users\\Will-Meister\\Desktop\\stuff99\\Stadium_PROJECT\\Seats.xlsx")
+    df = pd.DataFrame(read)
     APEX = Stadium()
     window = Setup()
-# APEX.reserve("B", 1)
-# APEX.reserve("B", 5)
-# APEX.reserve("B", 1)
-# APEX.reserve("A", 13)
-# APEX.budget(50, 110)
